@@ -1,0 +1,168 @@
+name: git-nt CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  MAX_BINARY_BYTES: "6291456" # 6 MiB hard ceiling (target: < 3 MiB)
+
+# NOTE: Pin third-party GitHub Actions to full 40-char commit SHAs before
+# enabling CI on a public or production repository.
+jobs:
+  lint-and-dep-audit:
+    name: Format, Clippy, Zero-C & L4 Isolation Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Restore Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Audit dependency tree for C toolchains, banned -sys crates & L4 read-only isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          TREE=$(cargo tree --workspace --edges normal --target x86_64-unknown-linux-gnu)
+
+          # 1. Fail if any C/C++ build-script driver enters the normal dependency graph
+          if echo "$TREE" | grep -E '\b(cc|cmake|pkg-config|bindgen|nasm-rs|autotools)\s+v[0-9]'; then
+            echo "::error::Banned C/C++ build-script dependency detected in normal graph."
+            exit 1
+          fi
+
+          # 2. Fail on any -sys crate except pure-Rust kernel/OS ABI struct definitions
+          SYS_CRATES=$(echo "$TREE" \
+            | grep -Eo '[A-Za-z0-9_-]+-sys[[:space:]]+v[0-9.]+' \
+            | grep -Ev '^(linux-raw-sys|windows-sys)\b' \
+            | sort -u || true)
+
+          if [ -n "$SYS_CRATES" ]; then
+            echo "::error::Banned *-sys crate(s) detected:"
+            echo "$SYS_CRATES"
+            exit 1
+          fi
+
+          # 3. Enforce compile-time L4 read-only isolation: nt-mcp must never depend on nt-write
+          if cargo tree -p nt-mcp --edges normal | grep -q '\bnt-write\b'; then
+            echo "::error::Layer 4 isolation violated: nt-mcp depends on nt-write."
+            exit 1
+          fi
+
+          echo "ZERO_C_AND_L4_GRAPH_OK"
+
+      - name: Run strict Clippy lints
+        env:
+          CC: /bin/false
+          CXX: /bin/false
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  zero-c-build-and-size:
+    name: Zero-C Release Build & Binary Size Gate (< 6 MiB)
+    runs-on: ${{ matrix.os }}
+    needs: lint-and-dep-audit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary with C/C++ compilers disabled
+        env:
+          CC: /bin/false
+          CXX: /bin/false
+        run: cargo build --release --bin git-nt
+
+      - name: Enforce < 6 MiB binary size ceiling
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="target/release/git-nt"
+          test -f "$BIN"
+
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            SIZE_BYTES=$(stat -c%s "$BIN")
+          else
+            SIZE_BYTES=$(stat -f%z "$BIN")
+          fi
+          SIZE_MIB=$(awk "BEGIN { printf \"%.2f\", $SIZE_BYTES / 1048576 }")
+
+          echo "Stripped git-nt size (${RUNNER_OS}): ${SIZE_BYTES} bytes (${SIZE_MIB} MiB)"
+          if [ "$SIZE_BYTES" -ge "$MAX_BINARY_BYTES" ]; then
+            echo "::error::Binary size ${SIZE_MIB} MiB exceeds 6.00 MiB (${MAX_BINARY_BYTES} bytes) ceiling."
+            exit 1
+          fi
+
+      - name: Verify no unexpected C shared libraries are dynamically linked
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            LINKED=$(ldd target/release/git-nt)
+          else
+            LINKED=$(otool -L target/release/git-nt)
+          fi
+          echo "$LINKED"
+          if echo "$LINKED" | grep -E 'libsqlite3|libgit2|libssl|libcrypto'; then
+            echo "::error::Unexpected C shared library linked into git-nt."
+            exit 1
+          fi
+
+  test-suite:
+    name: Workspace Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: lint-and-dep-audit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Configure Git identity for temporary-repo integration tests
+        run: |
+          git config --global user.name "git-nt-ci"
+          git config --global user.email "ci@neurotiler.dev"
+          git config --global init.defaultBranch main
+
+      - name: Run full workspace tests (unit, integration & doctests) with C compilers disabled
+        env:
+          CC: /bin/false
+          CXX: /bin/false
+        run: cargo test --workspace

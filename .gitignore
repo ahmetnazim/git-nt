@@ -1,0 +1,43 @@
+# =============================================================================
+# git-nt (Arch Rev 4.1) — Repository Ignore Rules
+# =============================================================================
+# IMPORTANT: Tracked Negative-Space tombstones live in `.nt/ns/` and MUST NOT
+# be ignored here.
+
+# --- Rust / Cargo ---
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock.bak
+
+# --- git-nt Local-Only Sensitive Telemetry (NEVER commit or push) ---
+# Raw Tier 3 <think> reasoning traces and local scratchpads (AGENTS.md §2.6)
+.nt-local/
+*.think.txt
+*.think.log
+# Defensive ignore if a staging dir is ever created outside .git/
+.nt-stage/
+
+# --- Phase 1 Falsification Pilot & Local Benchmark Outputs ---
+experiments/pilot/out/
+experiments/pilot/.venv/
+experiments/pilot/__pycache__/
+*.pyc
+.pytest_cache/
+
+# --- Temporary Test Repositories & Coverage Artifacts ---
+/tmp/
+*.profraw
+*.profdata
+lcov.info
+
+# --- OS & Editor Artifacts ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/settings.local.json
+.idea/

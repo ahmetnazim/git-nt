@@ -1,0 +1,10 @@
+# Root workspace manifest stub (Phase 0).
+# Phase 2, Slice 1 populates `[workspace]`, `[workspace.package]`,
+# `[workspace.lints]`, and `[workspace.dependencies]` alongside `crates/*`.
+
+[profile.release]
+opt-level = "z"       # Optimize aggressively for compact binary footprint (< 3 MiB target, < 6 MiB ceiling)
+lto = "fat"           # Full cross-crate dead-code elimination
+codegen-units = 1     # Maximum LTO/size optimization
+strip = "symbols"     # Strip debug info and symbol tables from target/release/git-nt
+panic = "abort"       # Removes unwinding tables (~10-15% smaller binary)
