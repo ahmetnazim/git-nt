@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Core schema, UUIDv7, RFC 8785 JCS, L2 sanitizer, and L3 Spotlighting primitives for git-nt"
 
 [lints]
 workspace = true

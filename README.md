@@ -86,20 +86,20 @@ Measured against `target/release/git-nt` (`v0.1.0`) on macOS Apple Silicon (see 
 ### Option 1: Install from Source (Zero-C Verified)
 
 ```bash
-git clone <your-repo-url> git-nt
+git clone https://github.com/ahmetnazim/git-nt.git
 cd git-nt
 CC=/bin/false CXX=/bin/false cargo install --path crates/git-nt --locked
 ```
 
-Or install directly from GitHub once pushed:
+Or install directly from GitHub:
 
 ```bash
-CC=/bin/false CXX=/bin/false cargo install --git https://github.com/<owner>/git-nt.git --bin git-nt --locked
+CC=/bin/false CXX=/bin/false cargo install --git https://github.com/ahmetnazim/git-nt.git --bin git-nt --locked
 ```
 
 ### Option 2: Prebuilt Release Binaries (GitHub Releases)
 
-Tagged releases (`v*`) automatically publish stripped Linux (`x86_64`) and macOS (`arm64` / `x86_64`) tarballs plus `SHA256SUMS.txt` via [.github/workflows/release.yml](.github/workflows/release.yml). Place `git-nt` on your `PATH` so Git automatically dispatches `git nt <subcommand>`.
+Tagged releases (`v*`) automatically publish stripped Linux (`x86_64`) and macOS (`arm64` / `x86_64`) tarballs plus `SHA256SUMS.txt` on [GitHub Releases](https://github.com/ahmetnazim/git-nt/releases) via [.github/workflows/release.yml](.github/workflows/release.yml). Place `git-nt` on your `PATH` so Git automatically dispatches `git nt <subcommand>`.
 
 ### Repository Setup (Per Target Repo)
 
