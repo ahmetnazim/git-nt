@@ -533,18 +533,22 @@ pub fn commit_with_options(
     let parsed = parse_git_commit_args(git_commit_args)?;
 
     let paths = resolve_repo_paths(repo_dir)?;
-    let diff_set = if opts.promote_all {
-        None
+    // Fast path: when `.git/nt-stage/` has zero staged `.json` files, skip `git diff` completely.
+    let has_staged = !list_staged_files(&paths.stage_dir)?.is_empty();
+    let (batch, skipped_unmatched) = if has_staged {
+        let diff_set = if opts.promote_all {
+            None
+        } else {
+            let mut files = staged_index_files(&paths.repo_root)?;
+            if parsed.include_all_tracked {
+                files.extend(modified_tracked_files(&paths.repo_root)?);
+            }
+            Some(files)
+        };
+        claim_and_materialize(&paths, diff_set.as_ref(), opts.promote_all)?
     } else {
-        let mut files = staged_index_files(&paths.repo_root)?;
-        if parsed.include_all_tracked {
-            files.extend(modified_tracked_files(&paths.repo_root)?);
-        }
-        Some(files)
+        (ClaimBatch::new(), 0)
     };
-
-    let (batch, skipped_unmatched) =
-        claim_and_materialize(&paths, diff_set.as_ref(), opts.promote_all)?;
 
     let promoted_ids: Vec<String> = batch.entries.iter().map(|e| e.id.clone()).collect();
     let promoted_paths: Vec<String> = batch
@@ -588,7 +592,7 @@ pub fn commit_with_options(
     }
 
     batch.finalize(&paths.stage_dir)?;
-    let head_sha = read_head_sha(&paths.repo_root)?;
+    let head_sha = read_head_sha(&paths.repo_root, &paths.stage_dir)?;
 
     Ok(CommitReport {
         promoted_ids,

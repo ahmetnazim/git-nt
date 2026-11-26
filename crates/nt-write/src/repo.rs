@@ -42,40 +42,39 @@ fn trim_single_trailing_newline(bytes: &[u8]) -> &[u8] {
     bytes.strip_suffix(b"\r").unwrap_or(bytes)
 }
 
-fn path_from_git_stdout(bytes: &[u8]) -> PathBuf {
-    PathBuf::from(OsStr::from_bytes(trim_single_trailing_newline(bytes)))
-}
-
 /// Resolves the repository root, per-worktree staging directory (`.git/nt-stage/`),
-/// and tracked tombstone directory (`.nt/ns/`) for `repo_dir`.
+/// and tracked tombstone directory (`.nt/ns/`) for `repo_dir` in a single `git rev-parse` call.
 pub fn resolve_repo_paths(repo_dir: &Path) -> Result<RepoPaths, WriteError> {
     let abs_cwd = fs::canonicalize(repo_dir).map_err(|e| WriteError::io(repo_dir, e))?;
 
-    let top_out = hardened_git(&abs_cwd)
-        .args(["rev-parse", "--show-toplevel"])
+    let out = hardened_git(&abs_cwd)
+        .args(["rev-parse", "--show-toplevel", "--git-path", "nt-stage"])
         .output()
         .map_err(|e| WriteError::io(&abs_cwd, e))?;
 
-    if !top_out.status.success() {
+    if !out.status.success() {
         return Err(WriteError::NotAGitRepo(repo_dir.to_path_buf()));
     }
 
-    let repo_root = path_from_git_stdout(&top_out.stdout);
-
-    let stage_out = hardened_git(&abs_cwd)
-        .args(["rev-parse", "--git-path", "nt-stage"])
-        .output()
-        .map_err(|e| WriteError::io(&abs_cwd, e))?;
-
-    if !stage_out.status.success() {
+    let trimmed = trim_single_trailing_newline(&out.stdout);
+    let mut parts = trimmed.splitn(2, |&b| b == b'\n');
+    let Some(top_bytes) = parts.next() else {
+        return Err(WriteError::NotAGitRepo(repo_dir.to_path_buf()));
+    };
+    let Some(stage_bytes) = parts.next() else {
         return Err(WriteError::GitCommandFailed {
-            command: "git rev-parse --git-path nt-stage".to_owned(),
-            code: stage_out.status.code(),
-            stderr: String::from_utf8_lossy(&stage_out.stderr).trim().to_owned(),
+            command: "git rev-parse --show-toplevel --git-path nt-stage".to_owned(),
+            code: out.status.code(),
+            stderr: "unexpected single-line output from git rev-parse".to_owned(),
         });
-    }
+    };
 
-    let raw_stage = path_from_git_stdout(&stage_out.stdout);
+    let repo_root = PathBuf::from(OsStr::from_bytes(
+        top_bytes.strip_suffix(b"\r").unwrap_or(top_bytes),
+    ));
+    let raw_stage = PathBuf::from(OsStr::from_bytes(
+        stage_bytes.strip_suffix(b"\r").unwrap_or(stage_bytes),
+    ));
     let stage_dir = if raw_stage.is_absolute() {
         raw_stage
     } else {
@@ -233,8 +232,32 @@ fn run_git_index_mutation_with_retry(
     Ok(())
 }
 
-/// Reads the current `HEAD` commit SHA (40+ lowercase hex chars).
-pub(crate) fn read_head_sha(repo_root: &Path) -> Result<String, WriteError> {
+fn is_hex_oid(s: &str) -> bool {
+    matches!(s.len(), 40 | 64) && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// Fast-path loose-ref HEAD reader (`<git_dir>/HEAD` -> `<git_dir>/<ref>`), falling back to
+/// `git rev-parse HEAD` for packed-refs, reftables, or linked worktree shared refs.
+pub(crate) fn read_head_sha(repo_root: &Path, stage_dir: &Path) -> Result<String, WriteError> {
+    if let Some(git_dir) = stage_dir.parent()
+        && let Ok(head_raw) = fs::read_to_string(git_dir.join("HEAD"))
+    {
+        let head = head_raw.trim();
+        if is_hex_oid(head) {
+            return Ok(head.to_owned());
+        }
+        if let Some(ref_rel) = head.strip_prefix("ref: ")
+            && !ref_rel.contains("..")
+            && !ref_rel.starts_with('/')
+            && let Ok(oid_raw) = fs::read_to_string(git_dir.join(ref_rel))
+        {
+            let oid = oid_raw.trim();
+            if is_hex_oid(oid) {
+                return Ok(oid.to_owned());
+            }
+        }
+    }
+
     let out = hardened_git(repo_root)
         .args(["rev-parse", "HEAD"])
         .output()

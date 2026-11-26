@@ -79,33 +79,20 @@ impl NativeGitReader {
         Ok(Self { repo_root })
     }
 
-    fn git_config_get(&self, key: &str, as_bool: bool) -> Result<Option<String>, ReadError> {
-        let mut cmd = hardened_git(&self.repo_root);
-        cmd.arg("config");
-        if as_bool {
-            cmd.arg("--bool");
+    fn parse_git_bool(key: &str, raw: Option<&str>) -> Result<bool, ReadError> {
+        // In `git config -z`, a bare key with no value (`[nt]\n\trequireSigned`) means `true`.
+        let Some(val) = raw else {
+            return Ok(true);
+        };
+        match val.trim().to_ascii_lowercase().as_str() {
+            "true" | "yes" | "on" | "1" => Ok(true),
+            "false" | "no" | "off" | "0" | "" => Ok(false),
+            other => Err(ReadError::GitCommandFailed {
+                command: format!("git config -z --get-regexp ({key})"),
+                code: Some(128),
+                stderr: format!("invalid boolean config value '{other}' for '{key}'"),
+            }),
         }
-        cmd.args(["--get", key]);
-
-        let out = cmd
-            .output()
-            .map_err(|e| ReadError::io(&self.repo_root, e))?;
-
-        if out.status.success() {
-            let val = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-            return Ok(Some(val));
-        }
-
-        // Exit code 1 means the key is simply not set.
-        if out.status.code() == Some(1) {
-            return Ok(None);
-        }
-
-        Err(ReadError::GitCommandFailed {
-            command: format!("git config --get {key}"),
-            code: out.status.code(),
-            stderr: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
-        })
     }
 
     fn fetch_blobs_batch(&self, items: &[(String, String)]) -> Result<Vec<RawTreeBlob>, ReadError> {
@@ -280,17 +267,62 @@ impl RepoReader for NativeGitReader {
     fn read_trust_config(&self) -> Result<TrustConfig, ReadError> {
         let mut cfg = TrustConfig::default();
 
-        if let Some(ref_val) = self.git_config_get("nt.trustedRef", false)?
-            && !ref_val.is_empty()
-        {
-            validate_ref_name(&ref_val)?;
-            cfg.trusted_ref = ref_val;
+        // Fetch all nt.* trust settings in a single subprocess call (saves 2 git spawns per hydrate/MCP call).
+        let out = hardened_git(&self.repo_root)
+            .args([
+                "config",
+                "-z",
+                "--get-regexp",
+                r"^nt\.(trustedref|requiresigned|allowuntrustedgpgtrust)$",
+            ])
+            .output()
+            .map_err(|e| ReadError::io(&self.repo_root, e))?;
+
+        if !out.status.success() {
+            // Exit code 1 means no nt.* keys are set; return defaults.
+            if out.status.code() == Some(1) {
+                return Ok(cfg);
+            }
+            return Err(ReadError::GitCommandFailed {
+                command: "git config -z --get-regexp ^nt\\.".to_owned(),
+                code: out.status.code(),
+                stderr: String::from_utf8_lossy(&out.stderr).trim().to_owned(),
+            });
         }
-        if let Some(req_sig) = self.git_config_get("nt.requireSigned", true)? {
-            cfg.require_signed = req_sig == "true";
-        }
-        if let Some(allow_u) = self.git_config_get("nt.allowUntrustedGpgTrust", true)? {
-            cfg.allow_untrusted_gpg_trust = allow_u == "true";
+
+        // Precedence order from Git is system -> global -> local; iterating forward makes last value win.
+        for entry in out.stdout.split(|&b| b == 0) {
+            if entry.is_empty() {
+                continue;
+            }
+            let (key_bytes, val_opt) = match entry.iter().position(|&b| b == b'\n') {
+                Some(pos) => (
+                    &entry[..pos],
+                    Some(String::from_utf8_lossy(&entry[pos + 1..]).into_owned()),
+                ),
+                None => (entry, None),
+            };
+            let key = String::from_utf8_lossy(key_bytes);
+            match key.as_ref() {
+                "nt.trustedref" => {
+                    if let Some(ref_val) = val_opt {
+                        let trimmed = ref_val.trim();
+                        if !trimmed.is_empty() {
+                            validate_ref_name(trimmed)?;
+                            cfg.trusted_ref = trimmed.to_owned();
+                        }
+                    }
+                }
+                "nt.requiresigned" => {
+                    cfg.require_signed =
+                        Self::parse_git_bool("nt.requireSigned", val_opt.as_deref())?;
+                }
+                "nt.allowuntrustedgpgtrust" => {
+                    cfg.allow_untrusted_gpg_trust =
+                        Self::parse_git_bool("nt.allowUntrustedGpgTrust", val_opt.as_deref())?;
+                }
+                _ => {}
+            }
         }
 
         Ok(cfg)
