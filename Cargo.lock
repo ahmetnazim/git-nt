@@ -237,6 +237,10 @@ name = "nt-write"
 version = "0.1.0"
 dependencies = [
  "nt-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
 ]
 
 [[package]]
