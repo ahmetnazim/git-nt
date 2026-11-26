@@ -93,6 +93,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          PRERELEASE_FLAG=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
           gh release create "${GITHUB_REF_NAME}" dist/*.tar.gz dist/SHA256SUMS.txt \
+            --repo "${GITHUB_REPOSITORY}" \
             --title "git-nt ${GITHUB_REF_NAME}" \
-            --generate-notes
+            --generate-notes \
+            ${PRERELEASE_FLAG}
