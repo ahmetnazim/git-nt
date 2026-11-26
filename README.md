@@ -31,14 +31,12 @@ Repository-resident agent memory is an indirect prompt-injection surface if untr
 
 ## Repository Structure
 
-> **Status:** Architecture and guardrails complete (Phase 0). The `crates/` workspace packages below are scaffolded starting in Phase 2, Slice 1.
-
 ```text
 git-nt/
 ├── AGENTS.md                     # Non-negotiable engineering invariants & CI gates
 ├── README.md                     # Project overview, setup, and usage
 ├── LICENSE                       # Apache License 2.0
-├── Cargo.toml                    # Pure-Rust 2024 workspace manifest (scaffolded in Slice 1)
+├── Cargo.toml                    # Pure-Rust 2024 workspace manifest
 ├── rust-toolchain.toml           # Pinned stable Rust toolchain + rustfmt/clippy
 ├── .github/workflows/ci.yml      # Zero-C build, -sys audit, L4 graph check, Clippy, tests, < 6 MiB gate
 ├── scripts/
@@ -47,7 +45,8 @@ git-nt/
 │   ├── SPEC_V4.md                # Canonical Negative-Space v1 schema, L1–L4 firewall & CLI/MCP spec
 │   ├── ANTI_PATTERNS.md          # Negative-space ledger of banned architectures (AP-01..AP-10)
 │   └── DEVELOPMENT_PHASES.md     # Phased vertical-slice roadmap & exit gates
-└── crates/                       # Planned (Phase 2, Slices 1–4)
+├── .nt/ns/                       # Tracked immutable Negative-Space tombstones (self-dogfooded)
+└── crates/
     ├── nt-core/                  # Schema types, UUIDv7, RFC 8785 JCS, SHA-256, L2/L3 security
     ├── nt-read/                  # Strictly read-only RepoReader (hardened git), L1 gate, query/ranking
     ├── nt-write/                 # Atomic ULID/UUIDv7 stager, claim/promote, native git commit, retire, audit
@@ -59,7 +58,7 @@ git-nt/
 
 ## Quick Start
 
-### 1. Build with Zero-C Verification (Once Slice 1+ Is Implemented)
+### 1. Build with Zero-C Verification
 
 ```bash
 CC=/bin/false CXX=/bin/false cargo build --release --bin git-nt
