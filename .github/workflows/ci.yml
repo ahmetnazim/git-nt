@@ -137,6 +137,9 @@ jobs:
             exit 1
           fi
 
+      - name: Self-dogfood repository tombstone audit
+        run: ./target/release/git-nt audit
+
   test-suite:
     name: Workspace Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

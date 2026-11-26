@@ -6,7 +6,7 @@
 > 3. **Deferred `gix`:** `nt-read` uses hardened native `git` behind a `RepoReader` trait (keeping binary `< 3 MiB` target and eliminating `gix` churn/limitations; `gix` remains an optional future drop-in).
 > 4. **Hardened JCS & L2:** Explicit recursive RFC 8785 JCS serializer with UTF-16 key sorting (not relying on `serde_json` struct/map order), L2 preserving benign `<`/`>`/single-backtick code syntax while neutralizing triple backticks, outer LLM/tool boundary tags, and Unicode Tags + Variation Selectors.
 
-**Scope reviewed:** every file in the repo: [AGENTS.md](file:///Users/ahmetnazimsahin/Documents/git-nt/AGENTS.md), [SPEC_V4.md](file:///Users/ahmetnazimsahin/Documents/git-nt/docs/SPEC_V4.md), [ANTI_PATTERNS.md](file:///Users/ahmetnazimsahin/Documents/git-nt/docs/ANTI_PATTERNS.md), [DEVELOPMENT_PHASES.md](file:///Users/ahmetnazimsahin/Documents/git-nt/docs/DEVELOPMENT_PHASES.md), [README.md](file:///Users/ahmetnazimsahin/Documents/git-nt/README.md), [Cargo.toml](file:///Users/ahmetnazimsahin/Documents/git-nt/Cargo.toml), [.gitignore](file:///Users/ahmetnazimsahin/Documents/git-nt/.gitignore), [setup-git-nt.sh](file:///Users/ahmetnazimsahin/Documents/git-nt/scripts/setup-git-nt.sh), [ci.yml](file:///Users/ahmetnazimsahin/Documents/git-nt/.github/workflows/ci.yml).
+**Scope reviewed:** every file in the repo: [AGENTS.md](../AGENTS.md), [SPEC_V4.md](SPEC_V4.md), [ANTI_PATTERNS.md](ANTI_PATTERNS.md), [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md), [README.md](../README.md), [Cargo.toml](../Cargo.toml), [.gitignore](../.gitignore), [setup-git-nt.sh](../scripts/setup-git-nt.sh), [ci.yml](../.github/workflows/ci.yml).
 **External facts checked:** the live Agent Trace spec (agent-trace.dev), the current `gix` release line, and jj's `change-id` commit header.
 
 ---
@@ -124,13 +124,13 @@ AP-04 bans tracked working-tree files because a single appended `.promptlog.json
 
 ## 3. File-by-file findings
 
-### [AGENTS.md](file:///Users/ahmetnazimsahin/Documents/git-nt/AGENTS.md)
+### [AGENTS.md](../AGENTS.md)
 - **§4 gate 2** (`cargo tree -e normal | grep -E -- "-sys"`) fails on Linux because pure-Rust `linux-raw-sys` and `windows-sys` match. README and CI exclude them; AGENTS.md doesn't. Also, `&& exit 1` closes an interactive shell.
 - `cargo fmt --check` runs in CI but isn't one of the AGENTS gates.
 - Missing rules: `#![forbid(unsafe_code)]`, a dev-dependency policy (integration tests need temporary directories; std-only or an approved dev-dep?), stdout discipline for MCP, a no-panic policy, and the supported platforms (Linux and macOS; Windows rename semantics differ).
 - §2.7: move to future scope (D2 #8).
 
-### [SPEC_V4.md](file:///Users/ahmetnazimsahin/Documents/git-nt/docs/SPEC_V4.md)
+### [SPEC_V4.md](SPEC_V4.md)
 - Wire schema: C5 and C6.
 - §3: C3. The heading is followed by stray empty list nesting (L80–84).
 - §4 reconcile: no merge semantics for divergent remote notes (C4). Tier 2 ("trace2") has no defined parser.
@@ -138,7 +138,7 @@ AP-04 bans tracked working-tree files because a single appended `.promptlog.json
 - §6: `stage` has no inputs for range or model attribution. No `sync` command. No `attach <rev>` command for jj users or after-the-fact use.
 - §7: "near-100%" can't be tested. Give a number (e.g. ≥ 99% over N mutations).
 
-### [ANTI_PATTERNS.md](file:///Users/ahmetnazimsahin/Documents/git-nt/docs/ANTI_PATTERNS.md)
+### [ANTI_PATTERNS.md](ANTI_PATTERNS.md)
 - AP-04: wrong justification (C5). Reopen per D1.
 - AP-06: the replacement includes the flawed L2 (C2).
 - AP-08 and AP-09: not applicable to this codebase. Move them out.
@@ -150,27 +150,27 @@ AP-04 bans tracked working-tree files because a single appended `.promptlog.json
   - denylist-only Unicode filtering
   - hooks that run repo-relative binaries
 
-### [DEVELOPMENT_PHASES.md](file:///Users/ahmetnazimsahin/Documents/git-nt/docs/DEVELOPMENT_PHASES.md)
+### [DEVELOPMENT_PHASES.md](DEVELOPMENT_PHASES.md)
 See §4.
 
-### [README.md](file:///Users/ahmetnazimsahin/Documents/git-nt/README.md)
+### [README.md](../README.md)
 - L133 and L149: the links are copy-paste artifacts (`https://www.google.com/search?q=docs/...`). Use relative links.
 - L28: the closing delimiter has four `>` characters (`>>>>`); the spec has three.
 - L149: `LICENSE` file is missing.
 - L36–52: the README describes `crates/` as if it exists. Mark it as planned.
 - "6 MiB" vs AGENTS "6 MB": pick one (CI uses 6 MiB = 6,291,456 bytes).
 
-### [Cargo.toml](file:///Users/ahmetnazimsahin/Documents/git-nt/Cargo.toml)
+### [Cargo.toml](../Cargo.toml)
 - Not a valid manifest yet; it needs `[workspace] resolver = "3"` and `members`.
 - `lto = "thin"` with `codegen-units = 1` is an odd combination. `lto = "fat"` (plus `opt-level = "z"` if needed) gives a smaller binary.
 - `strip = "symbols"` makes the `strip --strip-all` step in CI redundant.
 - Add `[workspace.package] edition = "2024"`, `rust-version`, and `[workspace.dependencies]` so the approved crate list is enforced in one place. Add `[workspace.lints]` with `unsafe_code = "forbid"`.
 - Commit `Cargo.lock` (this is a binary). Add a `rust-toolchain.toml`.
 
-### [.gitignore](file:///Users/ahmetnazimsahin/Documents/git-nt/.gitignore)
+### [.gitignore](../.gitignore)
 - Fine overall. Phase 0 step 3 says to ignore `.git/nt-stage/`, which is pointless because `.git/` is never tracked; the file correctly uses `.nt-stage/` instead. If D1 is adopted, `.nt/ns/` must **not** be ignored.
 
-### [setup-git-nt.sh](file:///Users/ahmetnazimsahin/Documents/git-nt/scripts/setup-git-nt.sh)
+### [setup-git-nt.sh](../scripts/setup-git-nt.sh)
 - **Security:** the hooks fall back to running `$(repo)/target/{release,debug}/git-nt`. In a user's repo, an attacker can commit an executable at that path, and the hook will run it on the next rebase. Use `PATH` or an explicit `git config nt.binary` only.
 - Line 101–103: the non-forced direct fetch refspec breaks `git fetch` and `git pull` once notes diverge (C4).
 - The managed block uses bash syntax (`[[ ]]`). If you append it to an existing `#!/bin/sh` hook, that hook breaks. If the existing hook ends with `exit 0`, the block never runs.
@@ -179,7 +179,7 @@ See §4.
 - `notes.rewrite.amend` and `notes.rewrite.rebase` are already `true` by default. Native rewrite copying plus `reconcile --from-stdin` means two mechanisms do the same job; pick one.
 - Until Slice 5, an installed `git-nt` binary has no `reconcile` subcommand, so every amend prints a warning.
 
-### [ci.yml](file:///Users/ahmetnazimsahin/Documents/git-nt/.github/workflows/ci.yml)
+### [ci.yml](../.github/workflows/ci.yml)
 - Actions aren't pinned to commit SHAs. That's weak supply-chain practice for a security-focused tool.
 - The test job doesn't install `jj`, `gpg`, or `ssh-keygen`, but Slice 3's exit gate needs all three.
 - `cargo test --all-targets` skips doctests.
