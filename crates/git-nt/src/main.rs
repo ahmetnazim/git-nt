@@ -7,7 +7,7 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
 use nt_core::FailureClass;
-use nt_mcp as _;
+use nt_mcp::serve_stdio;
 use nt_read::{HydrateOptions, NativeGitReader, hydrate_file};
 use nt_write::{
     AuditFinding, PromoteOptions, RetireMode, StageRequest, audit_repository,
@@ -42,6 +42,8 @@ enum Commands {
     Retire(RetireArgs),
     /// Audit .nt/ns/ for RFC 8785 JCS validity, < 1.5 KiB ceiling, secret hygiene & orphaned paths
     Audit,
+    /// Run the strictly read-only JSON-RPC 2.0 stdio MCP server (`nt_hydrate_file` only)
+    Mcp(McpArgs),
 }
 
 #[derive(Debug, Args)]
@@ -144,6 +146,13 @@ struct RetireArgs {
     reason: Option<String>,
 }
 
+#[derive(Debug, Args)]
+struct McpArgs {
+    /// Optional repository path (defaults to current working directory)
+    #[arg(long)]
+    repo: Option<PathBuf>,
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(cli) {
@@ -156,6 +165,24 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> Result<ExitCode, String> {
+    // Handle `mcp --repo <path>` before querying `current_dir()` so explicit `--repo`
+    // works even if the caller's cwd is inaccessible or unlinked.
+    if let Commands::Mcp(args) = cli.command {
+        let repo_dir = match args.repo {
+            Some(p) => p,
+            None => {
+                env::current_dir().map_err(|e| format!("failed to determine current dir: {e}"))?
+            }
+        };
+        let reader = NativeGitReader::open(&repo_dir).map_err(|e| e.to_string())?;
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+        let stderr = io::stderr();
+        serve_stdio(&reader, stdin.lock(), stdout.lock(), stderr.lock())
+            .map_err(|e| e.to_string())?;
+        return Ok(ExitCode::SUCCESS);
+    }
+
     let cwd = env::current_dir().map_err(|e| format!("failed to determine current dir: {e}"))?;
 
     match cli.command {
@@ -276,6 +303,8 @@ fn run(cli: Cli) -> Result<ExitCode, String> {
                 Ok(ExitCode::FAILURE)
             }
         }
+
+        Commands::Mcp(_) => unreachable!("handled prior to current_dir resolution"),
     }
 }
 

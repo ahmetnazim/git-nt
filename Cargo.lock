@@ -173,6 +173,7 @@ dependencies = [
  "nt-mcp",
  "nt-read",
  "nt-write",
+ "serde_json",
 ]
 
 [[package]]
@@ -223,6 +224,9 @@ version = "0.1.0"
 dependencies = [
  "nt-core",
  "nt-read",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

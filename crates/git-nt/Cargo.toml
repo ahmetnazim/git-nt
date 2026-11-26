@@ -18,3 +18,6 @@ nt-core.workspace = true
 nt-mcp.workspace = true
 nt-read.workspace = true
 nt-write.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
