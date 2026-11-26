@@ -1,6 +1,35 @@
-# Root workspace manifest stub (Phase 0).
-# Phase 2, Slice 1 populates `[workspace]`, `[workspace.package]`,
-# `[workspace.lints]`, and `[workspace.dependencies]` alongside `crates/*`.
+[workspace]
+resolver = "3"
+members = [
+  "crates/nt-core",
+  "crates/nt-read",
+  "crates/nt-write",
+  "crates/nt-mcp",
+  "crates/git-nt",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.dependencies]
+clap = { version = "4", features = ["derive"] }
+getrandom = "0.3"
+regex-lite = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.10"
+thiserror = "2"
+
+nt-core = { path = "crates/nt-core" }
+nt-read = { path = "crates/nt-read" }
+nt-write = { path = "crates/nt-write" }
+nt-mcp = { path = "crates/nt-mcp" }
 
 [profile.release]
 opt-level = "z"       # Optimize aggressively for compact binary footprint (< 3 MiB target, < 6 MiB ceiling)

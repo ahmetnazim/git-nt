@@ -125,7 +125,7 @@ Staging directory is resolved per-worktree via `git rev-parse --git-path nt-stag
    - **Anchored URL, shell-pipe & secret redaction (`regex-lite`, linear-time):**
      - URLs: `https?://\S+` -> `[REDACTED_URL]`
      - Download/exec chains: `\b(?:curl|wget)\b` -> `[REDACTED_CMD]`, `\|\s*(?:sh|bash|zsh|dash|python3?|perl|ruby|node)\b` -> `[REDACTED_PIPE]`
-     - Bounded credentials (zero false positives on `task-queue` / `disk-cache`): `\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{20,}`, `\bgh[pousr]_[A-Za-z0-9]{20,}`, `\bgithub_pat_[A-Za-z0-9_]{20,}`, `\bglpat-[A-Za-z0-9_-]{20,}`, `\bAKIA[0-9A-Z]{16}\b`, `\bxox[baprs]-[A-Za-z0-9-]{10,}`, `\bAIza[0-9A-Za-z_-]{35}\b`, `\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}`, `-----BEGIN [A-Z ]*PRIVATE KEY-----` -> `[REDACTED_SECRET]`.
+     - Bounded credentials (zero false positives on `task-queue` / `disk-cache` / `Basic authentication`): `\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{20,}`, `\bgh[pousr]_[A-Za-z0-9]{20,}`, `\bgithub_pat_[A-Za-z0-9_]{20,}`, `\bglpat-[A-Za-z0-9_-]{20,}`, `\bAKIA[0-9A-Z]{16}\b`, `\bxox[baprs]-[A-Za-z0-9-]{10,}`, `\bAIza[0-9A-Za-z_-]{35}\b`, `\bBearer\s+[A-Za-z0-9._~+/=-]{16,}`, `(?i)\bAuthorization:\s*Basic\s+[A-Za-z0-9+/=]{8,}`, `-----BEGIN [A-Z ]*PRIVATE KEY-----` -> `[REDACTED_SECRET]`.
    - Truncate every sanitized string field to `<= 240` Unicode scalar values.
    - **Idempotence invariant:** `sanitize_field(&sanitize_field(s)) == sanitize_field(s)` for all inputs.
 

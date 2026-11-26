@@ -1,0 +1,20 @@
+[package]
+name = "git-nt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "git-nt"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+clap.workspace = true
+nt-core.workspace = true
+nt-mcp.workspace = true
+nt-read.workspace = true
+nt-write.workspace = true

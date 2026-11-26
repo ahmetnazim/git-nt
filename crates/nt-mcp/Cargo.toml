@@ -1,0 +1,15 @@
+[package]
+name = "nt-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+# Layer 4 compile-time isolation invariant: nt-mcp depends ONLY on nt-core and nt-read.
+# NEVER add nt-write here.
+[dependencies]
+nt-core.workspace = true
+nt-read.workspace = true
