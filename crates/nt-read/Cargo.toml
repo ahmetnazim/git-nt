@@ -10,3 +10,4 @@ workspace = true
 
 [dependencies]
 nt-core.workspace = true
+thiserror.workspace = true
